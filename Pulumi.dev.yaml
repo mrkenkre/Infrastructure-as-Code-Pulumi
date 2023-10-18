@@ -1,7 +1,7 @@
 encryptionsalt: v1:Ew4fY2yvODs=:v1:b0szQAUGHnIRv7oo:bVzPUgYCG762lVFEwuUbGHNjKYaUcw==
 config:
-  aws:profile: devuser
-  aws:region: us-east-1
+  aws:profile: demouser
+  aws:region: ap-northeast-1
   iac-pulumi:num_of_subnets: 3
   iac-pulumi:vpc-cidr-block: 10.0.0.0/18
   iac-pulumi:vpc-name: my-vpc
@@ -15,3 +15,4 @@ config:
   iac-pulumi:public-route-name: public-route
   iac-pulumi:public-SubAssociationPrefix: public-subnet-association-
   iac-pulumi:private-SubAssociationPrefix: private-subnet-association-
+  iac-pulumi:web-app-port: 3000

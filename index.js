@@ -7,6 +7,7 @@ const config = new pulumi.Config();
 
 const vpcCidr = config.require("vpc-cidr-block");
 const vpcName = config.require("vpc-name");
+const region = config.require("region");
 const igatewayName = config.require("internet-gateway-name");
 const igatewayAttachName = config.require("internet-gateway-attachment-name");
 const publicRTName = config.require("public-rt-name");
@@ -22,12 +23,58 @@ const privateSubAssociationPrefix = config.require(
   "private-SubAssociationPrefix"
 );
 const numOfSubnets = config.require("num_of_subnets");
+const webappPort = config.require("web-app-port");
 
 const vpc = new aws.ec2.Vpc(vpcName, {
   cidrBlock: vpcCidr,
   tags: {
     Name: vpcName,
   },
+});
+
+const availabilityZones = pulumi.output(
+  aws.getAvailabilityZones({ state: "available", region: region })
+).names;
+
+const publicSubnets = [];
+const privateSubnets = [];
+
+availabilityZones.apply((azs) => {
+  const numSubnets = Math.min(azs.length, numOfSubnets);
+
+  // Create 3 public and 3 private subnets in specified availability zones.
+  for (let i = 0; i < numSubnets; i++) {
+    const publicSubnet = new aws.ec2.Subnet(`${publicSubPrefix}${i}`, {
+      vpcId: vpc.id,
+      availabilityZone: availabilityZones[i],
+      cidrBlock: `10.0.${i * 8}.0/24`,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        Name: `${publicSubPrefix}${i}`,
+      },
+    });
+    publicSubnets.push(publicSubnet);
+
+    const privateSubnet = new aws.ec2.Subnet(`${privateSubPrefix}${i}`, {
+      vpcId: vpc.id,
+      availabilityZone: availabilityZones[i],
+      cidrBlock: `10.0.${i * 8 + 1}.0/24`,
+      tags: {
+        Name: `${privateSubPrefix}${i}`,
+      },
+    });
+    privateSubnets.push(privateSubnet);
+
+    new aws.ec2.RouteTableAssociation(`${publicSubAssociationPrefix}${i}`, {
+      routeTableId: publicRouteTable.id,
+      subnetId: publicSubnet.id,
+    });
+
+    new aws.ec2.RouteTableAssociation(`${privateSubAssociationPrefix}${i}`, {
+      routeTableId: privateRouteTable.id,
+      subnetId: privateSubnet.id,
+    });
+  }
 });
 
 //Internet Gateway
@@ -41,46 +88,6 @@ const internetGatewayAttachment = new aws.ec2.InternetGatewayAttachment(
     internetGatewayId: internetGateway.id,
   }
 );
-
-//const availabilityZones = ["us-east-1a", "us-east-1b", "us-east-1c"];
-
-const availabilityZones = pulumi.output(
-  aws.getAvailabilityZones({ state: "available" })
-).names;
-
-const publicSubnets = [];
-const privateSubnets = [];
-
-let numSubnets;
-if (availabilityZones.length <= numOfSubnets) {
-  numSubnets = availabilityZones.length;
-} else {
-  numSubnets = numOfSubnets;
-}
-
-// Create 3 public and 3 private subnets in specified availability zones.
-for (let i = 0; i < numSubnets; i++) {
-  const publicSubnet = new aws.ec2.Subnet(`${publicSubPrefix}${i}`, {
-    vpcId: vpc.id,
-    availabilityZone: availabilityZones[i],
-    cidrBlock: `10.0.${i * 8}.0/24`,
-    mapPublicIpOnLaunch: true,
-    tags: {
-      Name: `${publicSubPrefix}${i}`,
-    },
-  });
-  publicSubnets.push(publicSubnet);
-
-  const privateSubnet = new aws.ec2.Subnet(`${privateSubPrefix}${i}`, {
-    vpcId: vpc.id,
-    availabilityZone: availabilityZones[i],
-    cidrBlock: `10.0.${i * 8 + 1}.0/24`,
-    tags: {
-      Name: `${privateSubPrefix}${i}`,
-    },
-  });
-  privateSubnets.push(privateSubnet);
-}
 
 //public route table
 const publicRouteTable = new aws.ec2.RouteTable(publicRTName, {
@@ -97,16 +104,16 @@ const publicRoute = new aws.ec2.Route(publicRouteName, {
   gatewayId: internetGateway.id,
 });
 
-// Attach all public subnets to the public route table
-publicSubnets.forEach((publicSubnet, index) => {
-  const subnetAssociation = new aws.ec2.RouteTableAssociation(
-    `${publicSubAssociationPrefix}${index}`,
-    {
-      routeTableId: publicRouteTable.id,
-      subnetId: publicSubnet.id,
-    }
-  );
-});
+// // Attach all public subnets to the public route table
+// publicSubnets.forEach((publicSubnet, index) => {
+//   const subnetAssociation = new aws.ec2.RouteTableAssociation(
+//     `${publicSubAssociationPrefix}${index}`,
+//     {
+//       routeTableId: publicRouteTable.id,
+//       subnetId: publicSubnet.id,
+//     }
+//   );
+// });
 
 // private route table
 const privateRouteTable = new aws.ec2.RouteTable(privateRTName, {
@@ -117,12 +124,43 @@ const privateRouteTable = new aws.ec2.RouteTable(privateRTName, {
 });
 
 // Iterate through private subnets and associate them with the private route table
-for (let i = 0; i < privateSubnets.length; i++) {
-  const subnetAssociation = new aws.ec2.RouteTableAssociation(
-    `${privateSubAssociationPrefix}${i}`,
-    {
-      routeTableId: privateRouteTable.id,
-      subnetId: privateSubnets[i].id,
-    }
-  );
-}
+// for (let i = 0; i < privateSubnets.length; i++) {
+//   const subnetAssociation = new aws.ec2.RouteTableAssociation(
+//     `${privateSubAssociationPrefix}${i}`,
+//     {
+//       routeTableId: privateRouteTable.id,
+//       subnetId: privateSubnets[i].id,
+//     }
+//   );
+// }
+
+webapp_security_group = aws.ec2.SecurityGroup(
+  "application security group",
+  (description = "Web Application Security Group"),
+  (ingress = [
+    aws.ec2.SecurityGroupIngressArgs(
+      (protocol = "tcp"),
+      (from_port = 22),
+      (to_port = 22),
+      (cidr_blocks = [igateCidr])
+    ),
+    aws.ec2.SecurityGroupIngressArgs(
+      (protocol = "tcp"),
+      (from_port = 80),
+      (to_port = 80),
+      (cidr_blocks = [igateCidr])
+    ),
+    aws.ec2.SecurityGroupIngressArgs(
+      (protocol = "tcp"),
+      (from_port = 443),
+      (to_port = 443),
+      (cidr_blocks = [igateCidr])
+    ),
+    aws.ec2.SecurityGroupIngressArgs(
+      (protocol = "tcp"),
+      (from_port = webappPort),
+      (to_port = webappPort),
+      (cidr_blocks = [igateCidr])
+    ),
+  ])
+);
