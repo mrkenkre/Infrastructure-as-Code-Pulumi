@@ -1,0 +1,19 @@
+encryptionsalt: v1:yfiyWd7Wneo=:v1:5caUhdKNh3/l84hZ:Fx3B5x9DIENwQT4F1kJokgBxow8+SA==
+config:
+  aws:profile: demouser
+  aws:region: us-east-1
+  iac-pulumi:internet-gateway-attachment-name: my-ig-attach
+  iac-pulumi:internet-gateway-cidr: 0.0.0.0/0
+  iac-pulumi:internet-gateway-name: my-ig
+  iac-pulumi:num_of_subnets: "3"
+  iac-pulumi:private-SubAssociationPrefix: private-subnet-association-
+  iac-pulumi:private-rt-name: private-rt
+  iac-pulumi:privateSubPrefix: private-subnet-
+  iac-pulumi:public-SubAssociationPrefix: public-subnet-association-
+  iac-pulumi:public-route-name: public-route
+  iac-pulumi:public-rt-name: public-rt
+  iac-pulumi:publicSubPrefix: public-subnet-
+  iac-pulumi:region: us-east-1
+  iac-pulumi:vpc-cidr-block: 10.0.0.0/18
+  iac-pulumi:vpc-name: my-vpc
+  iac-pulumi:web-app-port: 3000
