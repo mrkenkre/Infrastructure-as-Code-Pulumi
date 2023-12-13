@@ -1,6 +1,6 @@
 /node_modules/
 .pem
-/keys
+/certs&keys
 serverless.zip
 csr*
-/cert_files
+```
